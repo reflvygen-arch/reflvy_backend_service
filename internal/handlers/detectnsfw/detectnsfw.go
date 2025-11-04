@@ -8,6 +8,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -63,15 +64,22 @@ func DetectNSFWHandler(db *firestore.Client) gin.HandlerFunc {
 		part.Write(fileBytes)
 		writer.Close()
 
+		// Get NudNet API URL from environment variable
+		nudnetURL := os.Getenv("NUDNET_API_URL")
+		if nudnetURL == "" {
+			// Default to Railway deployment
+			nudnetURL = "https://web-production-1659.up.railway.app/detect"
+		}
+
 		// Forward the request to the external service
-		req, err := http.NewRequest("POST", "http://127.0.0.1:5000/detect", body)
+		req, err := http.NewRequest("POST", nudnetURL, body)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create request"})
 			return
 		}
 		req.Header.Set("Content-Type", writer.FormDataContentType())
 
-		client := &http.Client{}
+		client := &http.Client{Timeout: 30 * time.Second}
 		resp, err := client.Do(req)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to forward request"})
